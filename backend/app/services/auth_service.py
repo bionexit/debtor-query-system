@@ -20,30 +20,32 @@ class AuthService:
         if not user:
             return None, "Invalid username or password"
         
-        if user.is_locked and user.locked_until and user.locked_until > datetime.utcnow():
+        # Check if account is locked
+        if user.locked_until and user.locked_until > datetime.utcnow():
             remaining = (user.locked_until - datetime.utcnow()).seconds // 60
             return None, f"Account locked. Try again in {remaining} minutes"
         
         if not verify_password(password, user.hashed_password):
-            user.failed_login_attempts += 1
+            user.login_attempts += 1
             
-            if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
-                user.is_locked = True
+            if user.login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
                 user.locked_until = datetime.utcnow() + timedelta(minutes=settings.LOCKOUT_DURATION_MINUTES)
                 db.commit()
                 return None, f"Account locked due to {settings.MAX_LOGIN_ATTEMPTS} failed attempts"
             
             db.commit()
-            remaining = settings.MAX_LOGIN_ATTEMPTS - user.failed_login_attempts
+            remaining = settings.MAX_LOGIN_ATTEMPTS - user.login_attempts
             return None, f"Invalid password. {remaining} attempts remaining"
         
-        if not user.is_active:
+        # Check status enum (ACTIVE/INACTIVE/LOCKED)
+        from app.models.user import UserStatus
+        if user.status == UserStatus.INACTIVE:
             return None, "Account is deactivated"
         
-        # Reset failed attempts on successful login
-        user.failed_login_attempts = 0
-        user.is_locked = False
+        # Reset login attempts on successful login
+        user.login_attempts = 0
         user.locked_until = None
+        user.last_login_at = datetime.utcnow()
         db.commit()
         
         return user, ""

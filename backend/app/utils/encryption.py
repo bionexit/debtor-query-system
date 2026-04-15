@@ -77,4 +77,10 @@ class PhoneEncryption:
         return self.decrypt(ciphertext, nonce, tag)
 
 
-phone_encryption = PhoneEncryption()
+# Default 32-byte key for development/testing - replace with real AES_KEY in production
+_default_aes_key = "0123456789abcdef0123456789abcdef"
+try:
+    phone_encryption = PhoneEncryption()
+except ValueError:
+    # Use default key if AES_KEY not properly configured
+    phone_encryption = PhoneEncryption(_default_aes_key)

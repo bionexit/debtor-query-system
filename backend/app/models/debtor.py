@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Foreign
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
-from app.core.database import Base
+from app.models.models import Base
 
 
 class DebtorStatus(str, enum.Enum):

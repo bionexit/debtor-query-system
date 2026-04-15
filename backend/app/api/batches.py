@@ -7,7 +7,7 @@ from app.schemas.schemas import BatchCreate, BatchUpdate, BatchResponse
 from app.services.batch_service import BatchService
 from app.api.deps import get_current_user, require_operator
 
-router = APIRouter(prefix="/api/batches", tags=["batches"])
+router = APIRouter(prefix="/batches", tags=["batches"])
 
 
 @router.post("/", response_model=BatchResponse)

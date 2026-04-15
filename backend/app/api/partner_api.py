@@ -10,7 +10,7 @@ import hmac
 import hashlib
 import time
 
-router = APIRouter(prefix="/api/partner", tags=["partner"])
+router = APIRouter(prefix="/partner", tags=["partner"])
 
 
 def verify_partner_auth(

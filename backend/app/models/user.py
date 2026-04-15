@@ -2,19 +2,19 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, E
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
-from app.core.database import Base
+from app.models.models import Base
 
 
 class UserRole(str, enum.Enum):
-    ADMIN = "admin"
-    OPERATOR = "operator"
-    VIEWER = "viewer"
+    ADMIN = "ADMIN"
+    OPERATOR = "OPERATOR"
+    VIEWER = "VIEWER"
 
 
 class UserStatus(str, enum.Enum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    LOCKED = "locked"
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    LOCKED = "LOCKED"
 
 
 class User(Base):

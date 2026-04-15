@@ -11,7 +11,7 @@ from app.services.h5_service import H5AuthService, H5DebtInfoService
 from app.core.security import verify_token
 from app.api.deps import get_db as deps_get_db
 
-router = APIRouter(prefix="/api/h5", tags=["h5"])
+router = APIRouter(prefix="/h5", tags=["h5"])
 
 
 def get_h5_user_from_token(authorization: str = None, db: Session = Depends(get_db)) -> H5User:

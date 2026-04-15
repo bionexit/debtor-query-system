@@ -6,12 +6,32 @@ from fastapi.testclient import TestClient
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 
-from app.models.models import Base, User, UserRole, Debtor, DebtorStatus, Batch, BatchStatus
-from app.models.models import Voucher, VoucherStatus, SMSTemplate, SMSTask, SMSTaskStatus
-from app.models.models import H5User, Partner, SMSChannel, ChannelStatus, PaymentAccount, Config
+# Import Base from models.py
+from app.models.models import Base
+
+# Import enums from models.py
+from app.models.models import (
+    DebtorStatus, BatchStatus, VoucherStatus, SMSTaskStatus,
+    SmsTemplateStatus, ChannelStatus, AttemptType, AIStatus, ImportTaskStatus,
+    CaseBatch, PaymentVoucher, SmsTemplate, SmsTask, SmsSendLog,
+    SmsChannel, SystemConfig, ConfigChangeLog, ImportTask, ApiAccessLog,
+    Captcha, Partner, Admin, AdminSession, Debtor, PaymentAccount,
+    AccessToken, SessionToken, FailedAttempt
+)
+
+# Import User from user.py
+from app.models.user import User, UserRole, UserStatus
+
+# Import database dependency
 from app.models.database import get_db
+
+# Import security functions
 from app.core.security import create_access_token, create_h5_token, get_password_hash
+
+# Import settings
 from app.core.config import settings
+
+# Import main app
 from app.main import app
 
 # Test database URL - SQLite in-memory for tests
@@ -68,7 +88,8 @@ def admin_user(db_session) -> User:
         email="admin@example.com",
         hashed_password=get_password_hash("admin123"),
         role=UserRole.ADMIN,
-        is_active=True
+        status=UserStatus.ACTIVE,
+        is_superadmin=False
     )
     db_session.add(user)
     db_session.commit()
@@ -84,7 +105,8 @@ def operator_user(db_session) -> User:
         email="operator@example.com",
         hashed_password=get_password_hash("operator123"),
         role=UserRole.OPERATOR,
-        is_active=True
+        status=UserStatus.ACTIVE,
+        is_superadmin=False
     )
     db_session.add(user)
     db_session.commit()
@@ -100,7 +122,8 @@ def viewer_user(db_session) -> User:
         email="viewer@example.com",
         hashed_password=get_password_hash("viewer123"),
         role=UserRole.VIEWER,
-        is_active=True
+        status=UserStatus.ACTIVE,
+        is_superadmin=False
     )
     db_session.add(user)
     db_session.commit()
@@ -116,10 +139,10 @@ def locked_user(db_session) -> User:
         email="locked@example.com",
         hashed_password=get_password_hash("locked123"),
         role=UserRole.OPERATOR,
-        is_active=True,
-        is_locked=True,
-        locked_until=datetime.utcnow() + timedelta(minutes=15),
-        failed_login_attempts=5
+        status=UserStatus.ACTIVE,
+        is_superadmin=False,
+        login_attempts=5,
+        locked_until=datetime.utcnow() + timedelta(minutes=15)
     )
     db_session.add(user)
     db_session.commit()
@@ -174,14 +197,16 @@ def viewer_headers(viewer_token) -> dict:
 # ============ Debtor Fixtures ============
 
 @pytest.fixture
-def sample_batch(db_session, admin_user) -> Batch:
+def sample_batch(db_session, admin_user) -> CaseBatch:
     """Create a sample batch"""
-    batch = Batch(
-        batch_no="BATCH-20240101-TEST01",
-        name="Test Batch",
-        description="Test batch description",
-        status=BatchStatus.PENDING,
-        created_by=admin_user.id
+    batch = CaseBatch(
+        batch_id="BATCH-20240101-TEST01",
+        batch_name="Test Batch",
+        client_name="Test Client",
+        partner_id="PARTNER001",
+        commission_date=datetime.utcnow(),
+        status=BatchStatus.ACTIVE.value,
+        remark="Test batch description"
     )
     db_session.add(batch)
     db_session.commit()
@@ -190,16 +215,20 @@ def sample_batch(db_session, admin_user) -> Batch:
 
 
 @pytest.fixture
-def sample_debtor(db_session, sample_batch) -> Debtor:
+def sample_debtor(db_session, sample_batch, admin_user) -> Debtor:
     """Create a sample debtor"""
     debtor = Debtor(
+        debtor_number="D20240001",
         name="Zhang San",
         id_card="110101199001011234",
-        phone="13800138000",
+        encrypted_phone="13800138000",  # Stored encrypted
+        phone_nonce="nonce_placeholder",
+        phone_tag="tag_placeholder",
         address="Beijing",
-        debt_amount=10000.0,
+        overdue_amount=10000,
+        overdue_days=30,
         status=DebtorStatus.ACTIVE,
-        batch_id=sample_batch.id
+        created_by_id=admin_user.id
     )
     db_session.add(debtor)
     db_session.commit()
@@ -208,18 +237,22 @@ def sample_debtor(db_session, sample_batch) -> Debtor:
 
 
 @pytest.fixture
-def sample_debtors(db_session, sample_batch) -> list:
+def sample_debtors(db_session, sample_batch, admin_user) -> list:
     """Create multiple sample debtors"""
     debtors = []
     for i in range(5):
         debtor = Debtor(
-            name=f" Debtor {i}",
+            debtor_number=f"D2024000{i+1}",
+            name=f"Debtor {i}",
             id_card=f"11010119900101{i:04d}",
-            phone=f"1380013{i:04d}",
+            encrypted_phone=f"1380013{i:04d}",  # Stored encrypted
+            phone_nonce=f"nonce_{i}",
+            phone_tag=f"tag_{i}",
             address=f"Address {i}",
-            debt_amount=1000.0 * (i + 1),
+            overdue_amount=1000 * (i + 1),
+            overdue_days=30 * (i + 1),
             status=DebtorStatus.ACTIVE,
-            batch_id=sample_batch.id
+            created_by_id=admin_user.id
         )
         debtors.append(debtor)
         db_session.add(debtor)
@@ -227,93 +260,24 @@ def sample_debtors(db_session, sample_batch) -> list:
     return debtors
 
 
-# ============ Voucher Fixtures ============
-
-@pytest.fixture
-def sample_voucher(db_session, operator_user) -> Voucher:
-    """Create a sample voucher"""
-    voucher = Voucher(
-        file_name="test.xlsx",
-        file_path="/uploads/test.xlsx",
-        file_size=1024,
-        status=VoucherStatus.PENDING,
-        uploaded_by=operator_user.id
-    )
-    db_session.add(voucher)
-    db_session.commit()
-    db_session.refresh(voucher)
-    return voucher
-
-
-# ============ SMS Fixtures ============
-
-@pytest.fixture
-def sample_template(db_session, admin_user) -> SMSTemplate:
-    """Create a sample SMS template"""
-    template = SMSTemplate(
-        name="Debt Reminder",
-        content="Dear {{name}}, your debt of {{amount}} is due.",
-        variables="name,amount",
-        is_active=True,
-        created_by=admin_user.id
-    )
-    db_session.add(template)
-    db_session.commit()
-    db_session.refresh(template)
-    return template
-
-
-@pytest.fixture
-def sample_task(db_session, sample_template, sample_batch, operator_user) -> SMSTask:
-    """Create a sample SMS task"""
-    task = SMSTask(
-        task_no="SMS-20240101-TEST01",
-        template_id=sample_template.id,
-        channel_id=1,
-        recipient_count=100,
-        status=SMSTaskStatus.PENDING,
-        created_by=operator_user.id
-    )
-    db_session.add(task)
-    db_session.commit()
-    db_session.refresh(task)
-    return task
-
-
-# ============ Channel Fixtures ============
-
-@pytest.fixture
-def sample_channel(db_session) -> SMSChannel:
-    """Create a sample SMS channel"""
-    channel = SMSChannel(
-        name="Test Channel",
-        provider="MockProvider",
-        endpoint="http://localhost:8001",
-        api_key="test-api-key",
-        status=ChannelStatus.ACTIVE,
-        priority=1,
-        is_active=True
-    )
-    db_session.add(channel)
-    db_session.commit()
-    db_session.refresh(channel)
-    return channel
-
-
 # ============ H5 Fixtures ============
 
 @pytest.fixture
-def h5_user(db_session) -> H5User:
-    """Create an H5 user"""
-    user = H5User(
-        phone="13900139000",
+def h5_user(db_session) -> Debtor:
+    """Create an H5 user (Debtor with phone for H5 auth)"""
+    debtor = Debtor(
+        debtor_number="H520240001",
         name="H5 User",
-        is_locked=False
+        id_card="110101199001019999",
+        encrypted_phone="13900139000",  # Stored encrypted
+        phone_nonce="h5_nonce",
+        phone_tag="h5_tag",
+        status=DebtorStatus.ACTIVE
     )
-    db_session.add(user)
+    db_session.add(debtor)
     db_session.commit()
-    db_session.refresh(user)
-    return user
+    db_session.refresh(debtor)
+    return debtor
 
 
 @pytest.fixture
@@ -334,12 +298,14 @@ def h5_headers(h5_token) -> dict:
 def sample_partner(db_session) -> Partner:
     """Create a sample partner"""
     partner = Partner(
-        name="Test Partner",
+        partner_id="PARTNER001",
+        partner_name="Test Partner",
+        partner_code="TP001",
         api_key="test-api-key-123",
-        secret_key="test-secret-key-456",
-        is_active=True,
-        rate_limit=100,
-        daily_limit=10000
+        is_api_enabled=True,
+        is_revoked=False,
+        rate_limit_per_minute=60,
+        rate_limit_per_day=10000
     )
     db_session.add(partner)
     db_session.commit()
@@ -350,14 +316,15 @@ def sample_partner(db_session) -> Partner:
 # ============ Config Fixtures ============
 
 @pytest.fixture
-def sample_config(db_session, admin_user) -> Config:
+def sample_config(db_session, admin_user) -> SystemConfig:
     """Create a sample config"""
-    config = Config(
+    config = SystemConfig(
+        config_id="CFG001",
         config_key="MAX_QUERY_LIMIT",
         config_value="1000",
-        description="Maximum query limit",
         is_active=True,
-        changed_by=admin_user.id
+        description="Maximum query limit",
+        changed_by=admin_user.username
     )
     db_session.add(config)
     db_session.commit()
@@ -371,11 +338,13 @@ def sample_config(db_session, admin_user) -> Config:
 def sample_payment_account(db_session) -> PaymentAccount:
     """Create a sample payment account"""
     account = PaymentAccount(
+        account_id="ACC001",
+        partner_id="PARTNER001",
         bank_name="ICBC",
-        account_no="6222021234567890",
+        account_number="6222021234567890",
         account_name="Test Company",
-        bank_code="ICBC",
-        is_active=True
+        is_active=True,
+        is_primary=True
     )
     db_session.add(account)
     db_session.commit()

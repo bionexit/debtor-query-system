@@ -6,7 +6,7 @@ from app.services.auth_service import AuthService
 from app.api.deps import get_current_user, require_admin
 from app.models.models import User
 
-router = APIRouter(prefix="/api/admin/auth", tags=["admin_auth"])
+router = APIRouter(prefix="/admin/auth", tags=["admin_auth"])
 
 
 @router.post("/login", response_model=LoginResponse)

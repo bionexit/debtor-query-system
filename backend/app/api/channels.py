@@ -7,7 +7,7 @@ from app.schemas.schemas import ChannelCreate, ChannelUpdate, ChannelResponse, C
 from app.services.channel_service import ChannelService
 from app.api.deps import get_current_user, require_operator
 
-router = APIRouter(prefix="/api/channels", tags=["channels"])
+router = APIRouter(prefix="/channels", tags=["channels"])
 
 
 @router.post("/", response_model=ChannelResponse)

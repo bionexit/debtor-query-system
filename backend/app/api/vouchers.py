@@ -10,7 +10,7 @@ from app.schemas.schemas import VoucherUploadResponse, VoucherReviewRequest, Vou
 from app.services.voucher_service import VoucherService
 from app.api.deps import get_current_user, require_operator, require_admin
 
-router = APIRouter(prefix="/api/vouchers", tags=["vouchers"])
+router = APIRouter(prefix="/vouchers", tags=["vouchers"])
 
 UPLOAD_DIR = "./uploads"
 

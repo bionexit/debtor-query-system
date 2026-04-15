@@ -9,20 +9,41 @@ USE debtor_db;
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
-    email VARCHAR(100) NOT NULL UNIQUE,
+    email VARCHAR(100) UNIQUE,
+    phone VARCHAR(20) UNIQUE,
     hashed_password VARCHAR(255) NOT NULL,
-    role ENUM('admin', 'operator', 'viewer') DEFAULT 'operator',
-    is_active BOOLEAN DEFAULT TRUE,
-    is_locked BOOLEAN DEFAULT FALSE,
-    failed_login_attempts INT DEFAULT 0,
+    full_name VARCHAR(100),
+    role ENUM('ADMIN', 'OPERATOR', 'VIEWER') DEFAULT 'OPERATOR',
+    status ENUM('ACTIVE', 'INACTIVE', 'LOCKED') DEFAULT 'ACTIVE',
+    is_superadmin BOOLEAN DEFAULT FALSE,
+    login_attempts INT DEFAULT 0,
     locked_until DATETIME NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    last_login_at DATETIME,
+    created_by_id INT,
     INDEX idx_username (username),
     INDEX idx_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Debtors table
+-- Batches table (MUST be before debtors since debtors.batch_id references it)
+CREATE TABLE IF NOT EXISTS batches (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    batch_no VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+    total_count INT DEFAULT 0,
+    success_count INT DEFAULT 0,
+    fail_count INT DEFAULT 0,
+    created_by INT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_batch_no (batch_no),
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Debtors table (AFTER batches since it references batches.id)
 CREATE TABLE IF NOT EXISTS debtors (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -39,23 +60,6 @@ CREATE TABLE IF NOT EXISTS debtors (
     INDEX idx_id_card (id_card),
     INDEX idx_phone (phone),
     FOREIGN KEY (batch_id) REFERENCES batches(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Batches table
-CREATE TABLE IF NOT EXISTS batches (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    batch_no VARCHAR(50) NOT NULL UNIQUE,
-    name VARCHAR(100) NOT NULL,
-    description TEXT,
-    status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
-    total_count INT DEFAULT 0,
-    success_count INT DEFAULT 0,
-    fail_count INT DEFAULT 0,
-    created_by INT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_batch_no (batch_no),
-    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Vouchers table
@@ -237,8 +241,8 @@ CREATE TABLE IF NOT EXISTS config_change_logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Insert default admin user (password: admin123)
-INSERT INTO users (username, email, hashed_password, role, is_active)
-VALUES ('admin', 'admin@debtor.local', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewKyNiiGTMwFYjOa', 'admin', TRUE)
+INSERT INTO users (username, email, hashed_password, role, status, is_superadmin)
+VALUES ('admin', 'admin@debtor.local', '$2b$12$/ZUAals1Qf3Y2duc4uOv7umYbjQuhimPEabI3I4a1zMFNJVpDsVJS', 'ADMIN', 'ACTIVE', TRUE)
 ON DUPLICATE KEY UPDATE username = username;
 
 -- Insert default SMS channel for mock server

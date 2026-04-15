@@ -3,26 +3,28 @@ All SQLAlchemy models for the Debtor Payment Account Query System.
 Based on PRD Section 5 data models.
 """
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum, JSON, BigInteger
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
 import enum
 
-
-class Base:
-    """Base class for all models - shared with database.py"""
-    pass
+# Create the declarative base - this provides the .metadata attribute needed by SQLAlchemy
+Base = declarative_base()
 
 
+# ============= Enums =============
 class UserRole(str, enum.Enum):
     SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
     OPERATOR = "operator"
+    VIEWER = "viewer"
 
 
 class DebtorStatus(str, enum.Enum):
     ACTIVE = "active"
     BLACKLISTED = "blacklisted"
     CLEARED = "cleared"
+    OVERDUE = "overdue"
+    LEGAL = "legal"
 
 
 class BatchStatus(str, enum.Enum):
@@ -49,6 +51,20 @@ class SmsTemplateStatus(str, enum.Enum):
     INACTIVE = "inactive"
 
 
+class SMSStatus(str, enum.Enum):
+    PENDING = "pending"
+    SENT = "sent"
+    DELIVERED = "delivered"
+    FAILED = "failed"
+    UNKNOWN = "unknown"
+
+
+class SMSType(str, enum.Enum):
+    VERIFICATION = "verification"
+    NOTIFICATION = "notification"
+    ALERT = "alert"
+
+
 class ChannelStatus(str, enum.Enum):
     ACTIVE = "active"
     INACTIVE = "inactive"
@@ -71,6 +87,12 @@ class ImportTaskStatus(str, enum.Enum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class PartnerStatus(str, enum.Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    SUSPENDED = "suspended"
 
 
 # ============= Partner (合作方) =============
@@ -147,27 +169,6 @@ class CaseBatch(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-# ============= Debtor (债务人) =============
-class Debtor(Base):
-    __tablename__ = "debtors"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String(32), unique=True, nullable=False, index=True)
-    name = Column(String(50), nullable=False)
-    phone_number = Column(String(255), nullable=False)  # AES-256-GCM encrypted
-    phone_number_hash = Column(String(64), index=True)  # SHA-256 for fast lookup
-    id_last6 = Column(String(6), nullable=False)
-    total_amount = Column(Float, default=0.0)
-    principal = Column(Float, default=0.0)
-    interest = Column(Float, default=0.0)
-    penalty = Column(Float, default=0.0)
-    other_fees = Column(Float, default=0.0)
-    batch_id = Column(String(32), ForeignKey("case_batches.batch_id"), nullable=True)
-    partner_id = Column(String(32), ForeignKey("partners.partner_id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
 # ============= PaymentAccount (还款账户) =============
 class PaymentAccount(Base):
     __tablename__ = "payment_accounts"
@@ -189,7 +190,7 @@ class AccessToken(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     token = Column(String(32), unique=True, nullable=False, index=True)  # 5-char short token
-    user_id = Column(String(32), ForeignKey("debtors.user_id"), nullable=False)
+    user_id = Column(String(32), nullable=False)
     expires_at = Column(DateTime, nullable=True)  # NULL = permanent
     max_visits = Column(Integer, default=3)  # 0 = unlimited
     visit_count = Column(Integer, default=0)
@@ -204,7 +205,7 @@ class SessionToken(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     session_token = Column(String(64), unique=True, nullable=False, index=True)
-    user_id = Column(String(32), ForeignKey("debtors.user_id"), nullable=False)
+    user_id = Column(String(32), nullable=False)
     expires_at = Column(DateTime, nullable=False)
     ip_address = Column(String(45))
     user_agent = Column(String(255))
@@ -228,8 +229,8 @@ class PaymentVoucher(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     voucher_id = Column(String(32), unique=True, nullable=False, index=True)
-    user_id = Column(String(32), ForeignKey("debtors.user_id"), nullable=False)
-    batch_id = Column(String(32), ForeignKey("case_batches.batch_id"), nullable=True)
+    user_id = Column(String(32), nullable=False)
+    batch_id = Column(String(32), nullable=True)
     amount = Column(Float, nullable=False)
     voucher_image_urls = Column(JSON)  # ["url1", "url2"]
     payment_date = Column(DateTime)
@@ -269,7 +270,7 @@ class SmsTask(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     task_id = Column(String(32), unique=True, nullable=False, index=True)
-    template_id = Column(String(32), ForeignKey("sms_templates.template_id"), nullable=False)
+    template_id = Column(String(32), nullable=False)
     user_ids = Column(JSON)  # ["USER_001", "USER_002"]
     phone_numbers = Column(JSON)
     variables_data = Column(JSON)
@@ -323,13 +324,13 @@ class SystemConfig(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     config_id = Column(String(32), unique=True, nullable=False, index=True)
-    config_name = Column(String(50), unique=True, nullable=False)
-    config_data = Column(JSON)
+    config_key = Column(String(50), unique=True, nullable=False)
+    config_value = Column(String(500), nullable=False)
     is_active = Column(Boolean, default=False)
     description = Column(Text)
+    changed_by = Column(String(32))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_by = Column(String(32))
 
 
 # ============= ConfigChangeLog (配置变更记录) =============
@@ -397,4 +398,52 @@ class Captcha(Base):
     image_data = Column(Text, nullable=False)  # Base64 encoded image
     expires_at = Column(DateTime, nullable=False)
     is_used = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ============= Backward Compatibility Aliases =============
+Batch = CaseBatch
+Voucher = PaymentVoucher
+
+
+# ============= Re-export from sub-modules (must be at end to avoid circular imports) =============
+# These models are defined in sub-modules but many files import them from here
+from app.models.user import User
+from app.models.debtor import Debtor, QueryLog, ImportBatch
+
+# Re-export schema classes that some files incorrectly import from models
+# (These are Pydantic schemas, not SQLAlchemy models - import from schemas instead)
+# H5User, DebtInfo, Config - these don't exist as SQLAlchemy models
+
+# Alias for backward compatibility
+Config = SystemConfig
+SMSChannel = SmsChannel  # Some files use SMSChannel
+SMSTemplate = SmsTemplate  # Some files use SMSTemplate
+SMSTask = SmsTask  # Some files use SMSTask
+SMSTaskStatus = SMSTaskStatus  # Some files expect this name
+ChannelStatus = ChannelStatus  # Already correct, just for completeness
+
+# ============= H5User - create placeholder model for H5 authentication =============
+class H5User(Base):
+    __tablename__ = "h5_users"
+    id = Column(Integer, primary_key=True, index=True)
+    phone = Column(String(20), unique=True, index=True, nullable=False)
+    name = Column(String(100), nullable=True)
+    id_card_hash = Column(String(64), nullable=True)
+    is_locked = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ============= PartnerQueryLog (合作方查询日志) =============
+class PartnerQueryLog(Base):
+    __tablename__ = "partner_query_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    partner_id = Column(Integer, ForeignKey("partners.id"), nullable=False)
+    debtor_id = Column(Integer, ForeignKey("debtors.id"), nullable=True)
+    query_data = Column(Text, nullable=True)
+    response_data = Column(Text, nullable=True)
+    query_ip = Column(String(50), nullable=True)
+    status_code = Column(Integer, nullable=True)
+    error_message = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

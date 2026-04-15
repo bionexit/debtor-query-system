@@ -9,7 +9,7 @@ from app.schemas.schemas import ImportResponse
 from app.services.import_service import ImportService
 from app.api.deps import get_current_user, require_operator
 
-router = APIRouter(prefix="/api/import", tags=["import"])
+router = APIRouter(prefix="/import", tags=["import"])
 
 UPLOAD_DIR = "./imports"
 

@@ -68,23 +68,26 @@ class CaptchaService:
         """
         captcha_key = ''.join(random.choices(string.ascii_lowercase + string.digits, k=32))
         captcha_value = self._generate_code(4)
-        image_data = self._generate_image(captcha_value)
-        
+        image_data_bytes = self._generate_image(captcha_value)
+
         expire_at = datetime.utcnow() + timedelta(seconds=settings.CAPTCHA_EXPIRE_SECONDS)
-        
+
+        # Store as base64 encoded string (model column is Text)
+        image_data = base64.b64encode(image_data_bytes).decode('utf-8')
+
         captcha = Captcha(
             captcha_key=captcha_key,
-            captcha_value=captcha_value,
+            captcha_code=captcha_value,
             image_data=image_data,
-            expire_at=expire_at,
+            expires_at=expire_at,
         )
-        
+
         self.db.add(captcha)
         self.db.commit()
-        
-        image_base64 = base64.b64encode(image_data).decode('utf-8')
-        
-        return captcha_key, f"data:image/png;base64,{image_base64}"
+
+        image_base64 = f"data:image/png;base64,{image_data}"
+
+        return captcha_key, image_base64
     
     def verify(self, captcha_key: str, captcha_value: str) -> Tuple[bool, str]:
         """
@@ -106,7 +109,7 @@ class CaptchaService:
         if datetime.utcnow() > captcha.expire_at:
             return False, "Captcha expired"
         
-        if captcha.captcha_value.upper() != captcha_value.upper():
+        if captcha.captcha_code.upper() != captcha_value.upper():
             return False, "Invalid captcha"
         
         captcha.is_used = True

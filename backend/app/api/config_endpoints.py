@@ -7,7 +7,7 @@ from app.schemas.schemas import ConfigCreate, ConfigUpdate, ConfigResponse, Conf
 from app.services.config_service import ConfigService
 from app.api.deps import get_current_user, require_admin
 
-router = APIRouter(prefix="/api/configs", tags=["configs"])
+router = APIRouter(prefix="/configs", tags=["configs"])
 
 
 @router.post("/", response_model=ConfigResponse)
