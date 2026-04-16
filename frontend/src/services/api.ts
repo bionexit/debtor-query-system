@@ -148,38 +148,38 @@ export const debtorApi = {
 // ============ Batch API ============
 export const batchApi = {
   list: (params?: { skip?: number; limit?: number; status?: string; created_by?: number }) =>
-    api.get('/api/batches/', { params }),
+    api.get('/batches/', { params }),
   
-  get: (batchId: number) => api.get(`/api/batches/${batchId}`),
+  get: (batchId: number) => api.get(`/batches/${batchId}`),
   
   create: (data: { name: string; description?: string }) =>
-    api.post('/api/batches/', data),
+    api.post('/batches/', data),
   
   update: (batchId: number, data: { name?: string; description?: string; status?: string }) =>
-    api.put(`/api/batches/${batchId}`, data),
+    api.put(`/batches/${batchId}`, data),
   
-  delete: (batchId: number) => api.delete(`/api/batches/${batchId}`),
+  delete: (batchId: number) => api.delete(`/batches/${batchId}`),
 }
 
 // ============ Voucher API ============
 export const voucherApi = {
   list: (params?: { skip?: number; limit?: number; status?: string; uploaded_by?: number }) =>
-    api.get('/api/vouchers/', { params }),
+    api.get('/vouchers/', { params }),
   
-  get: (voucherId: number) => api.get(`/api/vouchers/${voucherId}`),
+  get: (voucherId: number) => api.get(`/vouchers/${voucherId}`),
   
   upload: (formData: FormData) =>
-    api.post('/api/vouchers/upload', formData, {
+    api.post('/vouchers/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   
   approve: (voucherId: number, data?: { comment?: string }) =>
-    api.post(`/api/vouchers/${voucherId}/approve`, data),
+    api.post(`/vouchers/${voucherId}/approve`, data),
   
   reject: (voucherId: number, data?: { comment?: string }) =>
-    api.post(`/api/vouchers/${voucherId}/reject`, data),
+    api.post(`/vouchers/${voucherId}/reject`, data),
   
-  delete: (voucherId: number) => api.delete(`/api/vouchers/${voucherId}`),
+  delete: (voucherId: number) => api.delete(`/vouchers/${voucherId}`),
 }
 
 // ============ SMS API ============
@@ -216,24 +216,24 @@ export const smsTemplateApi = {
 // ============ Channel API ============
 export const channelApi = {
   list: (params?: { skip?: number; limit?: number; status?: string; is_active?: boolean }) =>
-    api.get('/api/channels/', { params }),
+    api.get('/channels/', { params }),
   
-  get: (channelId: number) => api.get(`/api/channels/${channelId}`),
+  get: (channelId: number) => api.get(`/channels/${channelId}`),
   
   create: (data: { name: string; provider: string; endpoint?: string; api_key?: string; priority?: number }) =>
-    api.post('/api/channels/', data),
+    api.post('/channels/', data),
   
   update: (channelId: number, data: { name?: string; endpoint?: string; api_key?: string; status?: string; priority?: number; is_active?: boolean }) =>
-    api.put(`/api/channels/${channelId}`, data),
+    api.put(`/channels/${channelId}`, data),
   
   test: (channelId: number, data: { phone: string }) =>
-    api.post(`/api/channels/${channelId}/test`, data),
+    api.post(`/channels/${channelId}/test`, data),
   
-  enable: (channelId: number) => api.post(`/api/channels/${channelId}/enable`),
+  enable: (channelId: number) => api.post(`/channels/${channelId}/enable`),
   
-  disable: (channelId: number) => api.post(`/api/channels/${channelId}/disable`),
+  disable: (channelId: number) => api.post(`/channels/${channelId}/disable`),
   
-  delete: (channelId: number) => api.delete(`/api/channels/${channelId}`),
+  delete: (channelId: number) => api.delete(`/channels/${channelId}`),
 }
 
 // ============ Partner API ============
@@ -276,12 +276,12 @@ export const configApi = {
 // ============ Import API ============
 export const importApi = {
   importExcel: (batchId: number, formData: FormData) =>
-    api.post(`/api/import/excel?batch_id=${batchId}`, formData, {
+    api.post(`/import/excel?batch_id=${batchId}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   
   validateExcel: (formData: FormData) =>
-    api.post('/api/import/validate', formData, {
+    api.post('/import/validate', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 }

@@ -27,12 +27,6 @@ class DebtorStatus(str, enum.Enum):
     LEGAL = "legal"
 
 
-class BatchStatus(str, enum.Enum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    CLOSED = "closed"
-
-
 class VoucherStatus(str, enum.Enum):
     PENDING = "pending"
     APPROVED = "approved"
@@ -68,6 +62,7 @@ class SMSType(str, enum.Enum):
 class ChannelStatus(str, enum.Enum):
     ACTIVE = "active"
     INACTIVE = "inactive"
+    TESTING = "testing"
     SCANNED = "scanned"
 
 
@@ -108,6 +103,7 @@ class Partner(Base):
     contact_email = Column(String(100))
     status = Column(String(20), default="active")
     api_key = Column(String(64), unique=True, nullable=False, index=True)
+    secret_key = Column(String(64), unique=True, nullable=False, index=True)
     api_key_expires_at = Column(DateTime, nullable=True)
     is_api_enabled = Column(Boolean, default=True)
     is_revoked = Column(Boolean, default=False)
@@ -115,6 +111,10 @@ class Partner(Base):
     revoked_reason = Column(String(255), nullable=True)
     rate_limit_per_minute = Column(Integer, default=60)
     rate_limit_per_day = Column(Integer, default=10000)
+    daily_query_limit = Column(Integer, default=1000)
+    monthly_query_limit = Column(Integer, default=30000)
+    today_query_count = Column(Integer, default=0)
+    last_query_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -153,20 +153,32 @@ class AdminSession(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+# ============= BatchStatus (for Batch model) =============
+class BatchStatus(str, enum.Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 # ============= CaseBatch (委案批次) =============
 class CaseBatch(Base):
     __tablename__ = "case_batches"
 
     id = Column(Integer, primary_key=True, index=True)
-    batch_id = Column(String(32), unique=True, nullable=False, index=True)
-    batch_name = Column(String(100), nullable=False)
-    client_name = Column(String(100))
+    batch_no = Column(String(32), unique=True, nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
     partner_id = Column(String(32), ForeignKey("partners.partner_id"), nullable=False)
-    commission_date = Column(DateTime)
-    status = Column(String(20), default="active")
-    remark = Column(Text)
+    status = Column(SQLEnum(BatchStatus), default=BatchStatus.PENDING, nullable=False)
+    total_count = Column(Integer, default=0)
+    success_count = Column(Integer, default=0)
+    fail_count = Column(Integer, default=0)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    debtors = relationship("Debtor", back_populates="batch")
 
 
 # ============= PaymentAccount (还款账户) =============
@@ -229,12 +241,26 @@ class PaymentVoucher(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     voucher_id = Column(String(32), unique=True, nullable=False, index=True)
-    user_id = Column(String(32), nullable=False)
+    # File upload fields
+    file_name = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    file_size = Column(Integer, default=0)
+    total_count = Column(Integer, default=0)
+    success_count = Column(Integer, default=0)
+    fail_count = Column(Integer, default=0)
+    error_details = Column(Text, nullable=True)
+    # Status and review
+    status = Column(String(20), default="pending")
+    uploaded_by = Column(Integer, nullable=True)
+    reviewed_by = Column(Integer, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    review_comment = Column(Text, nullable=True)
+    # Legacy AI fields (for backward compatibility)
+    user_id = Column(String(32), nullable=True)
     batch_id = Column(String(32), nullable=True)
-    amount = Column(Float, nullable=False)
+    amount = Column(Float, nullable=True)
     voucher_image_urls = Column(JSON)  # ["url1", "url2"]
     payment_date = Column(DateTime)
-    status = Column(String(20), default="pending")
     remark = Column(Text)
     # AI识别字段
     ai_amount = Column(Float)
@@ -245,8 +271,6 @@ class PaymentVoucher(Base):
     ai_confidence = Column(Float)
     ai_status = Column(String(20), default="manual")
     created_at = Column(DateTime, default=datetime.utcnow)
-    reviewed_at = Column(DateTime, nullable=True)
-    reviewer_id = Column(String(32), nullable=True)
 
 
 # ============= SmsTemplate (短信模板) =============
@@ -316,6 +340,15 @@ class SmsChannel(Base):
     remark = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Additional fields expected by service/tests
+    name = Column(String(100))  # Alias for channel_name
+    provider = Column(String(100))
+    endpoint = Column(String(255))
+    api_key = Column(String(255))
+    success_rate = Column(Float, default=0.0)
+    avg_response_time = Column(Float, default=0.0)
+    is_active = Column(Boolean, default=True)
 
 
 # ============= SystemConfig (系统配置) =============
@@ -337,8 +370,9 @@ class SystemConfig(Base):
 class ConfigChangeLog(Base):
     __tablename__ = "config_change_logs"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    log_id = Column(BigInteger, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    log_id = Column(Integer, index=True)
+    config_id = Column(Integer, index=True)  # Foreign key to SystemConfig.id
     config_name = Column(String(50), nullable=False)
     config_key = Column(String(100), nullable=False)
     old_value = Column(Text)
@@ -398,6 +432,7 @@ class Captcha(Base):
     image_data = Column(Text, nullable=False)  # Base64 encoded image
     expires_at = Column(DateTime, nullable=False)
     is_used = Column(Boolean, default=False)
+    used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -408,7 +443,7 @@ Voucher = PaymentVoucher
 
 # ============= Re-export from sub-modules (must be at end to avoid circular imports) =============
 # These models are defined in sub-modules but many files import them from here
-from app.models.user import User
+from app.models.user import User, UserRole, UserStatus
 from app.models.debtor import Debtor, QueryLog, ImportBatch
 
 # Re-export schema classes that some files incorrectly import from models
@@ -423,7 +458,7 @@ SMSTask = SmsTask  # Some files use SMSTask
 SMSTaskStatus = SMSTaskStatus  # Some files expect this name
 ChannelStatus = ChannelStatus  # Already correct, just for completeness
 
-# ============= H5User - create placeholder model for H5 authentication =============
+# ============= H5User - H5 authentication user =============
 class H5User(Base):
     __tablename__ = "h5_users"
     id = Column(Integer, primary_key=True, index=True)
@@ -431,6 +466,13 @@ class H5User(Base):
     name = Column(String(100), nullable=True)
     id_card_hash = Column(String(64), nullable=True)
     is_locked = Column(Boolean, default=False)
+    locked_until = Column(DateTime, nullable=True)
+    captcha = Column(String(10), nullable=True)
+    captcha_expire_at = Column(DateTime, nullable=True)
+    verification_attempts = Column(Integer, default=0)
+    daily_query_count = Column(Integer, default=0)
+    query_date = Column(DateTime, nullable=True)
+    last_query_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

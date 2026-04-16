@@ -3,7 +3,7 @@ from typing import Optional, Tuple, List
 from datetime import datetime, timedelta
 import random
 import hashlib
-from app.models.models import H5User, DebtInfo, Debtor, PaymentAccount
+from app.models.models import H5User, Debtor, PaymentAccount
 from app.core.security import create_h5_token
 from app.core.config import settings
 
@@ -146,16 +146,6 @@ class H5DebtInfoService:
         if not debtor:
             return None, "No debt record found"
         
-        # Record the query
-        debt_info = DebtInfo(
-            h5_user_id=h5_user_id,
-            debtor_id=debtor.id,
-            query_time=datetime.utcnow(),
-            result_code="0000",
-            result_message="Query successful"
-        )
-        db.add(debt_info)
-        
         # Increment query count
         H5AuthService.increment_query_count(db, h5_user_id)
         
@@ -165,10 +155,10 @@ class H5DebtInfoService:
             "debtor_id": debtor.id,
             "name": debtor.name,
             "id_card": debtor.id_card,
-            "phone": debtor.phone,
-            "debt_amount": debtor.debt_amount,
+            "phone": debtor.encrypted_phone,
+            "debt_amount": debtor.overdue_amount,
             "status": debtor.status.value,
-            "query_time": debt_info.query_time.isoformat()
+            "query_time": datetime.utcnow().isoformat()
         }, ""
     
     @staticmethod

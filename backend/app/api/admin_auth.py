@@ -26,7 +26,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         access_token=token,
         user_id=user.id,
         username=user.username,
-        role=user.role.value
+        role=user.role.value.lower()
     )
 
 

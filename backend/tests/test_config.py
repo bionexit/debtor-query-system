@@ -133,6 +133,7 @@ class TestUpdateConfig:
 
     def test_update_config_creates_log(self, client, admin_headers, sample_config, db_session):
         """Test that updating config creates change log"""
+        original_value = sample_config.config_value  # Store original value
         response = client.put(
             f"/api/configs/{sample_config.id}",
             headers=admin_headers,
@@ -147,7 +148,7 @@ class TestUpdateConfig:
         ).all()
         
         assert len(logs) >= 1
-        assert logs[-1].old_value == sample_config.config_value
+        assert logs[-1].old_value == original_value
         assert logs[-1].new_value == "logged_value"
 
     def test_update_config_operator_forbidden(self, client, operator_headers, sample_config):
@@ -201,7 +202,7 @@ class TestSwitchConfig:
 class TestDeleteConfig:
     """Test config deletion (soft delete)"""
 
-    def test_delete_config_success(self, client, admin_headers, sample_config):
+    def test_delete_config_success(self, client, admin_headers, sample_config, db_session):
         """Test successful config deletion (soft delete)"""
         response = client.delete(
             f"/api/configs/{sample_config.id}",
@@ -240,6 +241,8 @@ class TestConfigChangeLogs:
         for i in range(3):
             log = ConfigChangeLog(
                 config_id=sample_config.id,
+                config_name=sample_config.config_key,
+                config_key=sample_config.config_key,
                 old_value=f"old_{i}",
                 new_value=f"new_{i}",
                 change_reason=f"Test {i}"

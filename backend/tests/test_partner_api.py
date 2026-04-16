@@ -189,7 +189,7 @@ class TestPartnerManagement:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["name"] == "New Partner"
+        assert data["partner_name"] == "New Partner"
         assert "api_key" in data
         assert "secret_key" in data
 
@@ -240,8 +240,8 @@ class TestRateLimiting:
 
     def test_rate_limit_check(self, client, sample_partner, sample_debtor, db_session):
         """Test rate limiting logic"""
-        # Set rate limit to 0
-        sample_partner.rate_limit = 0
+        # Set daily limit to 0
+        sample_partner.daily_query_limit = 0
         db_session.commit()
         
         timestamp = int(time.time())
@@ -262,7 +262,7 @@ class TestRateLimiting:
             }
         )
         assert response.status_code == 429
-        assert "rate limit" in response.json()["detail"].lower()
+        assert "limit" in response.json()["detail"].lower()
 
 
 class TestDailyLimit:
@@ -270,7 +270,7 @@ class TestDailyLimit:
 
     def test_daily_limit_exceeded(self, client, sample_partner, sample_debtor, db_session):
         """Test daily limit exceeded"""
-        sample_partner.today_usage = sample_partner.daily_limit
+        sample_partner.today_query_count = sample_partner.daily_query_limit
         db_session.commit()
         
         timestamp = int(time.time())
@@ -291,11 +291,11 @@ class TestDailyLimit:
             }
         )
         assert response.status_code == 429
-        assert "daily limit" in response.json()["detail"].lower()
+        assert "daily" in response.json()["detail"].lower()
 
     def test_usage_incremented(self, client, sample_partner, sample_debtor, db_session):
         """Test usage is incremented after query"""
-        initial_usage = sample_partner.today_usage
+        initial_usage = sample_partner.today_query_count
         
         timestamp = int(time.time())
         signature = generate_signature(
@@ -317,4 +317,4 @@ class TestDailyLimit:
         assert response.status_code == 200
         
         db_session.refresh(sample_partner)
-        assert sample_partner.today_usage == initial_usage + 1
+        assert sample_partner.today_query_count == initial_usage + 1

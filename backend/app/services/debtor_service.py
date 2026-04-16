@@ -30,6 +30,13 @@ class DebtorService:
             Debtor.is_deleted == False
         ).first()
     
+    def get_by_id_card(self, id_card: str) -> Optional[Debtor]:
+        """Get debtor by ID card."""
+        return self.db.query(Debtor).filter(
+            Debtor.id_card == id_card,
+            Debtor.is_deleted == False
+        ).first()
+    
     def get_all(self, skip: int = 0, limit: int = 100, status: Optional[DebtorStatus] = None) -> List[Debtor]:
         """Get all debtors with pagination."""
         query = self.db.query(Debtor).filter(Debtor.is_deleted == False)
@@ -50,12 +57,17 @@ class DebtorService:
         """Search debtors by various fields."""
         query = self.db.query(Debtor).filter(Debtor.is_deleted == False)
         
+        # Build OR conditions for keyword search across multiple fields
+        filters = []
         if debtor_number:
-            query = query.filter(Debtor.debtor_number.contains(debtor_number))
+            filters.append(Debtor.debtor_number.contains(debtor_number))
         if name:
-            query = query.filter(Debtor.name.contains(name))
+            filters.append(Debtor.name.contains(name))
         if id_card:
-            query = query.filter(Debtor.id_card.contains(id_card))
+            filters.append(Debtor.id_card.contains(id_card))
+        
+        if filters:
+            query = query.filter(or_(*filters))
         
         return query.offset(skip).limit(limit).all()
     
@@ -71,6 +83,12 @@ class DebtorService:
         existing = self.get_by_debtor_number(debtor_number)
         if existing:
             return None, f"Debtor with number {debtor_number} already exists"
+        
+        # Check for duplicate id_card
+        if id_card:
+            existing_id_card = self.get_by_id_card(id_card)
+            if existing_id_card:
+                return None, f"Debtor with ID card {id_card} already exists"
         
         encrypted_phone_data = None
         if phone:
@@ -110,6 +128,12 @@ class DebtorService:
         debtor = self.get_by_id(debtor_id)
         if not debtor:
             return None, "Debtor not found"
+        
+        # Check for duplicate id_card if being updated
+        if 'id_card' in kwargs and kwargs['id_card']:
+            existing = self.get_by_id_card(kwargs['id_card'])
+            if existing and existing.id != debtor_id:
+                return None, f"Debtor with ID card {kwargs['id_card']} already exists"
         
         if 'phone' in kwargs and kwargs['phone']:
             phone = kwargs['phone']

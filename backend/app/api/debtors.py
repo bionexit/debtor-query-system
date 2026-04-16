@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
 from app.api.auth import get_current_user
+from app.api.deps import require_operator
 from app.schemas.debtor import (
     DebtorCreate, DebtorUpdate, DebtorResponse, DebtorQueryRequest, DebtorQueryResponse,
     DebtorImportResult, QueryLogResponse, ImportBatchResponse
@@ -44,6 +45,33 @@ def get_debtor_stats(
     return debtor_service.get_debtor_stats()
 
 
+@router.get("/search/")
+def search_debtors(
+    keyword: str = Query(..., min_length=1),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Search debtors by keyword across multiple fields."""
+    debtor_service = DebtorService(db)
+    
+    # Search across debtor_number, name, and id_card
+    debtors = debtor_service.search(
+        debtor_number=keyword,
+        name=keyword,
+        id_card=keyword,
+        skip=skip,
+        limit=limit
+    )
+    total = len(debtors)  # For simplicity, return actual count (not total with pagination)
+    
+    return {
+        "debtors": [DebtorResponse.model_validate(d) for d in debtors],
+        "total": total
+    }
+
+
 @router.get("/{debtor_id}", response_model=DebtorResponse)
 def get_debtor(
     debtor_id: int,
@@ -82,7 +110,7 @@ def get_debtor_phone(
 def create_debtor(
     debtor_data: DebtorCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_operator)
 ):
     """Create a new debtor."""
     debtor_service = DebtorService(db)
@@ -133,7 +161,7 @@ def update_debtor(
 def delete_debtor(
     debtor_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_operator)
 ):
     """Delete a debtor."""
     debtor_service = DebtorService(db)

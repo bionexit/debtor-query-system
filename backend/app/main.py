@@ -13,6 +13,7 @@ from app.api.auth import router as auth_router
 from app.api.users import router as users_router
 from app.api.debtors import router as debtors_router
 from app.api.h5 import router as h5_router
+from app.api.h5_auth import router as h5_auth_router
 from app.api.partner import router as partner_router
 from app.api.partners import router as partners_router
 from app.api.captcha import router as captcha_router
@@ -24,6 +25,8 @@ from app.api.import_endpoints import router as import_router
 from app.api.partner_api import router as partner_api_router
 from app.api.admin_auth import router as admin_auth_router
 from app.api.sms import router as sms_router
+from app.api.sms_templates import router as sms_templates_router
+from app.api.sms_tasks import router as sms_tasks_router
 
 logging.basicConfig(
     level=logging.INFO if not settings.DEBUG else logging.DEBUG,
@@ -82,6 +85,7 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(debtors_router, prefix="/api")
 app.include_router(h5_router, prefix="/api")
+app.include_router(h5_auth_router, prefix="/api")
 app.include_router(partner_router, prefix="/api")
 app.include_router(partners_router, prefix="/api")
 app.include_router(captcha_router, prefix="/api")
@@ -93,6 +97,8 @@ app.include_router(import_router, prefix="/api")
 app.include_router(partner_api_router, prefix="/api")
 app.include_router(admin_auth_router, prefix="/api")
 app.include_router(sms_router, prefix="/api")
+app.include_router(sms_templates_router, prefix="/api")
+app.include_router(sms_tasks_router, prefix="/api")
 
 
 @app.get("/")

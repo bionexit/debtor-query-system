@@ -10,6 +10,7 @@ class DebtorStatus(str, enum.Enum):
     OVERDUE = "overdue"
     CLEARED = "cleared"
     LEGAL = "legal"
+    BLACKLISTED = "blacklisted"
 
 
 class PhoneEncryptData(Base):
@@ -59,9 +60,11 @@ class Debtor(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    batch_id = Column(Integer, ForeignKey("case_batches.id"), nullable=True)
     
     created_by = relationship("User", foreign_keys=[created_by_id])
     updated_by = relationship("User", foreign_keys=[updated_by_id])
+    batch = relationship("CaseBatch", foreign_keys=[batch_id])
 
     def __repr__(self):
         return f"<Debtor {self.debtor_number} - {self.name}>"

@@ -54,7 +54,7 @@ class AuthService:
     def create_token(user: User) -> str:
         """Create JWT access token for user"""
         return create_access_token(
-            data={"sub": str(user.id), "username": user.username, "role": user.role.value}
+            data={"sub": str(user.id), "username": user.username, "role": user.role.value.lower()}
         )
     
     @staticmethod

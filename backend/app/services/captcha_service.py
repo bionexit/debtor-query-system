@@ -59,12 +59,12 @@ class CaptchaService:
         
         return buffer.getvalue()
     
-    def generate(self) -> Tuple[str, str]:
+    def generate(self) -> Tuple[str, str, str]:
         """
         Generate a new captcha.
         
         Returns:
-            Tuple of (captcha_key, captcha_image_base64)
+            Tuple of (captcha_key, captcha_value, captcha_image_base64)
         """
         captcha_key = ''.join(random.choices(string.ascii_lowercase + string.digits, k=32))
         captcha_value = self._generate_code(4)
@@ -87,7 +87,7 @@ class CaptchaService:
 
         image_base64 = f"data:image/png;base64,{image_data}"
 
-        return captcha_key, image_base64
+        return captcha_key, captcha_value, image_base64
     
     def verify(self, captcha_key: str, captcha_value: str) -> Tuple[bool, str]:
         """
@@ -106,7 +106,7 @@ class CaptchaService:
         if captcha.is_used:
             return False, "Captcha already used"
         
-        if datetime.utcnow() > captcha.expire_at:
+        if datetime.utcnow() > captcha.expires_at:
             return False, "Captcha expired"
         
         if captcha.captcha_code.upper() != captcha_value.upper():

@@ -5,9 +5,9 @@ from enum import Enum
 
 
 class UserRole(str, Enum):
-    ADMIN = "admin"
-    OPERATOR = "operator"
-    VIEWER = "viewer"
+    ADMIN = "ADMIN"
+    OPERATOR = "OPERATOR"
+    VIEWER = "VIEWER"
 
 
 class DebtorStatus(str, Enum):
@@ -126,6 +126,7 @@ class DebtorResponse(DebtorBase):
 class BatchBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
+    partner_id: Optional[str] = None
 
 
 class BatchCreate(BatchBase):
@@ -277,9 +278,9 @@ class DebtInfoResponse(BaseModel):
 
 class PaymentAccountResponse(BaseModel):
     bank_name: str
-    account_no: str
+    account_number: str
     account_name: str
-    bank_code: Optional[str]
+    bank_code: Optional[str] = None
 
 
 # ============ Partner API Schemas ============
@@ -322,9 +323,9 @@ class ConfigChangeLogResponse(BaseModel):
     config_id: int
     old_value: Optional[str]
     new_value: Optional[str]
-    changed_by: Optional[int]
+    changed_by: Optional[str]
     change_reason: Optional[str]
-    created_at: datetime
+    changed_at: datetime
 
     class Config:
         from_attributes = True
@@ -333,7 +334,7 @@ class ConfigChangeLogResponse(BaseModel):
 class ConfigResponse(ConfigBase):
     id: int
     is_active: bool
-    changed_by: Optional[int]
+    changed_by: Optional[str]
     created_at: datetime
 
     class Config:
@@ -349,7 +350,7 @@ class ChannelBase(BaseModel):
 
 
 class ChannelCreate(ChannelBase):
-    pass
+    priority: int = Field(default=5, ge=0)
 
 
 class ChannelUpdate(BaseModel):

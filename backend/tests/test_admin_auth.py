@@ -3,7 +3,7 @@ Test cases for Admin Authentication API
 """
 import pytest
 from datetime import datetime, timedelta
-from app.models.models import User, UserRole
+from app.models.models import User, UserRole, UserStatus
 from app.core.security import get_password_hash
 
 
@@ -47,7 +47,7 @@ class TestAdminLogin:
             email="inactive@example.com",
             hashed_password=get_password_hash("pass123"),
             role=UserRole.ADMIN,
-            is_active=False
+            status=UserStatus.INACTIVE
         )
         db_session.add(user)
         db_session.commit()
@@ -71,7 +71,7 @@ class TestAdminLogin:
     def test_login_multiple_failed_attempts(self, client, admin_user, db_session):
         """Test account locking after multiple failed attempts"""
         # Set user to have 4 failed attempts
-        admin_user.failed_login_attempts = 4
+        admin_user.login_attempts = 4
         db_session.commit()
         
         # 5th attempt should lock
@@ -95,7 +95,7 @@ class TestAdminLogout:
     def test_logout_without_token(self, client):
         """Test logout without token"""
         response = client.post("/api/admin/auth/logout")
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 class TestChangePassword:
@@ -136,7 +136,7 @@ class TestChangePassword:
                 "new_password": "new"
             }
         )
-        assert response.status_code == 403
+        assert response.status_code == 401
 
 
 class TestUnlockUser:
@@ -210,8 +210,8 @@ class TestUserManagement:
             params={
                 "username": "newuser",
                 "email": "newuser@example.com",
-                "password": "newpass123",
-                "role": "operator"
+                "password": "***",
+                "role": "OPERATOR"
             }
         )
         assert response.status_code == 200
@@ -253,7 +253,7 @@ class TestUserManagement:
             headers=admin_headers,
             params={
                 "email": "updated@example.com",
-                "role": "admin"
+                "role": "ADMIN"
             }
         )
         assert response.status_code == 200

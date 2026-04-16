@@ -20,9 +20,9 @@ def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List all users (admin only)."""
-    if not current_user.is_superadmin and current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    """List all users (admin/operator access)."""
+    if not current_user.is_superadmin and current_user.role not in (UserRole.ADMIN, UserRole.OPERATOR):
+        raise HTTPException(status_code=403, detail="Admin or Operator access required")
     
     user_service = UserService(db)
     
@@ -53,7 +53,7 @@ def get_user(
     return UserResponse.model_validate(user)
 
 
-@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=UserResponse)
 def create_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
@@ -166,3 +166,72 @@ def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     
     return {"message": "User deleted successfully"}
+
+
+@router.put("/{user_id}/role")
+def update_user_role(
+    user_id: int,
+    role_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update user role (admin only)."""
+    if not current_user.is_superadmin and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if "role" not in role_data:
+        raise HTTPException(status_code=400, detail="Role is required")
+    
+    # Convert role to uppercase if it's a string
+    role_value = role_data["role"]
+    if isinstance(role_value, str):
+        role_value = role_value.upper()
+        try:
+            role_value = UserRole(role_value)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid role: {role_value}")
+    
+    user_service = UserService(db)
+    user = user_service.update(user_id, role=role_value)
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return UserResponse.model_validate(user)
+
+
+@router.put("/{user_id}/status")
+def update_user_status(
+    user_id: int,
+    status_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update user status (admin only)."""
+    if not current_user.is_superadmin and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if "status" not in status_data:
+        raise HTTPException(status_code=400, detail="Status is required")
+    
+    # Prevent self-deactivation
+    if current_user.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
+    
+    # Convert status to uppercase if it's a string
+    from app.schemas.user import UserStatus
+    status_value = status_data["status"]
+    if isinstance(status_value, str):
+        status_value = status_value.upper()
+        try:
+            status_value = UserStatus(status_value)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status_value}")
+    
+    user_service = UserService(db)
+    user = user_service.update(user_id, status=status_value)
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return UserResponse.model_validate(user)

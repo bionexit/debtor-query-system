@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
+import time
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.models.partner import Partner, PartnerStatus, PartnerQueryLog
@@ -109,6 +110,125 @@ class PartnerService:
         partner.updated_at = datetime.utcnow()
         self.db.commit()
         return True
+
+    @staticmethod
+    def create_partner(db: Session, name: str, rate_limit: int = 100, daily_limit: int = 10000) -> Tuple[Optional["Partner"], Optional[str]]:
+        """Create a new partner account (simplified static method for API compatibility)."""
+        import uuid
+        partner_id = f"PTNR{uuid.uuid4().hex[:8].upper()}"
+        partner_code = f"CODE{uuid.uuid4().hex[:8].upper()}"
+        api_key = create_api_key()
+        secret_key = create_api_key()
+        
+        partner = Partner(
+            partner_id=partner_id,
+            partner_code=partner_code,
+            partner_name=name,
+            api_key=api_key,
+            secret_key=secret_key,
+            status=PartnerStatus.ACTIVE,
+            daily_query_limit=daily_limit,
+            monthly_query_limit=daily_limit * 30,
+            rate_limit_per_minute=rate_limit,
+            rate_limit_per_day=daily_limit,
+            is_api_enabled=True,
+            is_revoked=False,
+        )
+        
+        db.add(partner)
+        db.commit()
+        db.refresh(partner)
+        
+        return partner, None
+
+    @staticmethod
+    def revoke_partner(db: Session, partner_id: int) -> Tuple[bool, str]:
+        """Revoke a partner account."""
+        partner = db.query(Partner).filter(Partner.id == partner_id).first()
+        if not partner:
+            return False, "Partner not found"
+        
+        partner.is_revoked = True
+        partner.updated_at = datetime.utcnow()
+        db.commit()
+        return True, "Partner revoked successfully"
+
+    @staticmethod
+    def regenerate_keys(db: Session, partner_id: int) -> Tuple[Optional["Partner"], Optional[str]]:
+        """Regenerate API keys for a partner."""
+        partner = db.query(Partner).filter(Partner.id == partner_id).first()
+        if not partner:
+            return None, "Partner not found"
+        
+        partner.api_key = create_api_key()
+        partner.secret_key = create_api_key()
+        partner.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(partner)
+        
+        return partner, None
+
+    @staticmethod
+    def get_partner_by_api_key(db: Session, api_key: str) -> Optional["Partner"]:
+        """Get partner by API key (static method for API compatibility)."""
+        return db.query(Partner).filter(Partner.api_key == api_key).first()
+
+    @staticmethod
+    def check_rate_limit(db: Session, partner_id: int) -> Tuple[bool, Optional[str]]:
+        """Check if partner has exceeded rate limits (static method for API compatibility)."""
+        partner = db.query(Partner).filter(Partner.id == partner_id).first()
+        if not partner:
+            return False, "Partner not found"
+        
+        if partner.today_query_count >= partner.daily_query_limit:
+            return False, f"Daily query limit exceeded ({partner.daily_query_limit})"
+        
+        return True, None
+
+    @staticmethod
+    def check_daily_limit(db: Session, partner_id: int) -> Tuple[bool, Optional[str]]:
+        """Check if partner has exceeded daily limits (static method for API compatibility)."""
+        partner = db.query(Partner).filter(Partner.id == partner_id).first()
+        if not partner:
+            return False, "Partner not found"
+        
+        if partner.today_query_count >= partner.daily_query_limit:
+            return False, f"Daily limit exceeded ({partner.today_query_count}/{partner.daily_query_limit})"
+        
+        return True, None
+
+    @staticmethod
+    def increment_usage(db: Session, partner_id: int):
+        """Increment partner's usage counters (static method for API compatibility)."""
+        partner = db.query(Partner).filter(Partner.id == partner_id).first()
+        if partner:
+            partner.today_query_count += 1
+            partner.last_query_at = datetime.utcnow()
+            db.commit()
+
+    @staticmethod
+    def verify_signature(api_key: str, signature: str, timestamp: int, secret_key: str) -> Tuple[bool, Optional[str]]:
+        """Verify HMAC-SHA256 signature for Partner API auth."""
+        import hmac
+        import hashlib
+        
+        # Check timestamp is within 5 minutes
+        current_time = int(time.time())
+        if abs(current_time - timestamp) > 300:
+            return False, "Timestamp expired"
+        
+        # Compute expected signature
+        message = f"{api_key}{timestamp}"
+        expected_signature = hmac.new(
+            secret_key.encode(),
+            message.encode(),
+            hashlib.sha256
+        ).hexdigest()
+        
+        if not hmac.compare_digest(signature, expected_signature):
+            return False, "Invalid signature"
+        
+        return True, None
     
     def verify_api_key(self, api_key: str) -> Tuple[Optional[Partner], str]:
         """
@@ -141,24 +261,7 @@ class PartnerService:
         
         allowed_list = [ip.strip() for ip in partner.allowed_ips.split(',')]
         return ip in allowed_list
-    
-    def check_rate_limit(self, partner: Partner) -> Tuple[bool, str]:
-        """
-        Check if partner has exceeded rate limits.
-        
-        Returns:
-            Tuple of (is_allowed, error_message)
-        """
-        today = datetime.utcnow().date()
-        
-        if partner.today_query_count >= partner.daily_query_limit:
-            return False, f"Daily query limit exceeded ({partner.daily_query_limit})"
-        
-        if partner.this_month_query_count >= partner.monthly_query_limit:
-            return False, f"Monthly query limit exceeded ({partner.monthly_query_limit})"
-        
-        return True, ""
-    
+
     def increment_query_count(self, partner_id: int):
         """Increment partner's query counters."""
         partner = self.get_by_id(partner_id)
@@ -192,7 +295,7 @@ class PartnerService:
         Returns:
             Tuple of (result_dict, error_message)
         """
-        is_allowed, error = self.check_rate_limit(partner)
+        is_allowed, error = PartnerService.check_rate_limit(self.db, partner.id)
         if not is_allowed:
             return {'success': False, 'error_code': 'RATE_LIMIT', 'error_message': error}, error
         

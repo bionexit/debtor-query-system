@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 from datetime import datetime, timedelta
-from passlib.context import CryptContext
+import bcrypt
 
 # Import Base from models.py
 from app.models.models import Base
@@ -16,17 +16,19 @@ from app.models.models import (
     CaseBatch, PaymentVoucher, SmsTemplate, SmsTask, SmsSendLog,
     SmsChannel, SystemConfig, ConfigChangeLog, ImportTask, ApiAccessLog,
     Captcha, Partner, Admin, AdminSession, Debtor, PaymentAccount,
-    AccessToken, SessionToken, FailedAttempt
+    AccessToken, SessionToken, FailedAttempt, H5User
 )
 
 # Import User from user.py
 from app.models.user import User, UserRole, UserStatus
 
-# Import database dependency
-from app.models.database import get_db
+# Import database dependency - MUST override both app.core.database and app.models.database
+# since different routers import from different modules
+from app.core.database import get_db as core_get_db
+from app.models.database import get_db as models_get_db
 
 # Import security functions
-from app.core.security import create_access_token, create_h5_token, get_password_hash
+from app.core.security import create_access_token, create_h5_token
 
 # Import settings
 from app.core.config import settings
@@ -37,8 +39,10 @@ from app.main import app
 # Test database URL - SQLite in-memory for tests
 TEST_DATABASE_URL = "sqlite:///:memory:"
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password: str) -> str:
+    """Password hash using direct bcrypt (not passlib)."""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
 @pytest.fixture(scope="function")
@@ -72,7 +76,8 @@ def client(db_session):
         finally:
             pass
 
-    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[core_get_db] = override_get_db
+    app.dependency_overrides[models_get_db] = override_get_db
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -82,14 +87,14 @@ def client(db_session):
 
 @pytest.fixture
 def admin_user(db_session) -> User:
-    """Create an admin user"""
+    """Create a superadmin user (has full privileges)"""
     user = User(
         username="admin",
         email="admin@example.com",
         hashed_password=get_password_hash("admin123"),
         role=UserRole.ADMIN,
         status=UserStatus.ACTIVE,
-        is_superadmin=False
+        is_superadmin=True
     )
     db_session.add(user)
     db_session.commit()
@@ -139,9 +144,8 @@ def locked_user(db_session) -> User:
         email="locked@example.com",
         hashed_password=get_password_hash("locked123"),
         role=UserRole.OPERATOR,
-        status=UserStatus.ACTIVE,
+        status=UserStatus.LOCKED,
         is_superadmin=False,
-        login_attempts=5,
         locked_until=datetime.utcnow() + timedelta(minutes=15)
     )
     db_session.add(user)
@@ -200,13 +204,14 @@ def viewer_headers(viewer_token) -> dict:
 def sample_batch(db_session, admin_user) -> CaseBatch:
     """Create a sample batch"""
     batch = CaseBatch(
-        batch_id="BATCH-20240101-TEST01",
-        batch_name="Test Batch",
-        client_name="Test Client",
+        batch_no="BATCH-20240101-TEST01",
+        name="Test Batch",
         partner_id="PARTNER001",
-        commission_date=datetime.utcnow(),
-        status=BatchStatus.ACTIVE.value,
-        remark="Test batch description"
+        status=BatchStatus.PENDING,
+        total_count=0,
+        success_count=0,
+        fail_count=0,
+        created_by=admin_user.id
     )
     db_session.add(batch)
     db_session.commit()
@@ -263,26 +268,22 @@ def sample_debtors(db_session, sample_batch, admin_user) -> list:
 # ============ H5 Fixtures ============
 
 @pytest.fixture
-def h5_user(db_session) -> Debtor:
-    """Create an H5 user (Debtor with phone for H5 auth)"""
-    debtor = Debtor(
-        debtor_number="H520240001",
+def h5_user(db_session) -> H5User:
+    """Create an H5 user for authentication"""
+    user = H5User(
+        phone="13900139000",
         name="H5 User",
-        id_card="110101199001019999",
-        encrypted_phone="13900139000",  # Stored encrypted
-        phone_nonce="h5_nonce",
-        phone_tag="h5_tag",
-        status=DebtorStatus.ACTIVE
+        is_locked=False
     )
-    db_session.add(debtor)
+    db_session.add(user)
     db_session.commit()
-    db_session.refresh(debtor)
-    return debtor
+    db_session.refresh(user)
+    return user
 
 
 @pytest.fixture
 def h5_token(h5_user) -> str:
-    """Create H5 access token"""
+    """Create H5 access token using H5User's phone"""
     return create_h5_token(data={"phone": h5_user.phone, "sub": str(h5_user.id)})
 
 
@@ -302,10 +303,14 @@ def sample_partner(db_session) -> Partner:
         partner_name="Test Partner",
         partner_code="TP001",
         api_key="test-api-key-123",
+        secret_key="test-secret-key-456",
         is_api_enabled=True,
         is_revoked=False,
         rate_limit_per_minute=60,
-        rate_limit_per_day=10000
+        rate_limit_per_day=10000,
+        daily_query_limit=1000,
+        monthly_query_limit=30000,
+        today_query_count=0
     )
     db_session.add(partner)
     db_session.commit()
@@ -350,3 +355,145 @@ def sample_payment_account(db_session) -> PaymentAccount:
     db_session.commit()
     db_session.refresh(account)
     return account
+
+
+# ============ SMS Channel Fixtures ============
+
+@pytest.fixture
+def sample_channel(db_session) -> SmsChannel:
+    """Create a sample SMS channel"""
+    channel = SmsChannel(
+        channel_id="CH001",
+        channel_name="Test Channel",
+        channel_code="TEST_CHANNEL",
+        class_name="MockSMSProvider",
+        file_path="/app/sms_providers/mock.py",
+        config_data={"api_key": "***", "api_url": "http://test.com"},
+        is_default=True,
+        status="active",
+        priority=1,
+        name="Test Channel",
+        provider="MockProvider",
+        endpoint="http://test.com/api",
+        api_key="test-key",
+        is_active=True
+    )
+    db_session.add(channel)
+    db_session.commit()
+    db_session.refresh(channel)
+    return channel
+
+
+# ============ SMS Template Fixtures ============
+
+@pytest.fixture
+def sample_template(db_session, sample_channel) -> SmsTemplate:
+    """Create a sample SMS template"""
+    template = SmsTemplate(
+        template_id="TPL001",
+        template_name="Test Template",
+        template_content="Hello {{name}}, your debt is {{amount}}",
+        variables=["name", "amount"],
+        status="active",
+        channel_id=sample_channel.channel_id
+    )
+    db_session.add(template)
+    db_session.commit()
+    db_session.refresh(template)
+    return template
+
+
+# ============ SMS Task Fixtures ============
+
+@pytest.fixture
+def sample_task(db_session, sample_template, admin_user) -> SmsTask:
+    """Create a sample SMS task"""
+    task = SmsTask(
+        task_id="TASK001",
+        template_id=sample_template.template_id,
+        user_ids=["USER001", "USER002"],
+        phone_numbers=["13800138000", "13800138001"],
+        variables_data={"name": ["John", "Jane"], "amount": ["1000", "2000"]},
+        status="pending"
+    )
+    db_session.add(task)
+    db_session.commit()
+    db_session.refresh(task)
+    return task
+
+
+# ============ Voucher Fixtures ============
+
+@pytest.fixture
+def sample_voucher(db_session, admin_user) -> PaymentVoucher:
+    """Create a sample payment voucher"""
+    voucher = PaymentVoucher(
+        voucher_id="VCH001",
+        file_name="test_voucher.xlsx",
+        file_path="./uploads/test_voucher.xlsx",
+        file_size=1024,
+        total_count=10,
+        success_count=8,
+        fail_count=2,
+        status="pending",
+        uploaded_by=admin_user.id,
+        ai_status="manual"
+    )
+    db_session.add(voucher)
+    db_session.commit()
+    db_session.refresh(voucher)
+    return voucher
+
+
+# ============ Access Token Fixtures ============
+
+@pytest.fixture
+def sample_access_token(db_session, admin_user) -> AccessToken:
+    """Create a sample access token for H5"""
+    token = AccessToken(
+        token="ABC12",
+        user_id=str(admin_user.id),
+        expires_at=datetime.utcnow() + timedelta(days=7),
+        max_visits=3,
+        visit_count=0,
+        is_used=False
+    )
+    db_session.add(token)
+    db_session.commit()
+    db_session.refresh(token)
+    return token
+
+
+# ============ Session Token Fixtures ============
+
+@pytest.fixture
+def h5_session_token(db_session, admin_user) -> SessionToken:
+    """Create a sample H5 session token"""
+    token = SessionToken(
+        session_token="h5_session_test_token_12345",
+        user_id=str(admin_user.id),
+        expires_at=datetime.utcnow() + timedelta(days=7)
+    )
+    db_session.add(token)
+    db_session.commit()
+    db_session.refresh(token)
+    return token
+
+
+# ============ SMS Send Log Fixtures ============
+
+@pytest.fixture
+def sample_sms_log(db_session) -> SmsSendLog:
+    """Create a sample SMS send log"""
+    log = SmsSendLog(
+        task_id="TASK001",
+        user_id="USER001",
+        phone_number="13800138000",
+        template_id="TPL001",
+        gateway_type="mock",
+        status="success"
+    )
+    db_session.add(log)
+    db_session.commit()
+    db_session.refresh(log)
+    return log

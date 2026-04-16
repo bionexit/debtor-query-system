@@ -10,6 +10,7 @@ class BatchService:
     
     @staticmethod
     def create_batch(db: Session, name: str, description: str = None, 
+                     partner_id: str = None,
                      created_by: int = None) -> Tuple[Batch, str]:
         """Create a new batch"""
         batch_no = f"BATCH-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
@@ -18,6 +19,7 @@ class BatchService:
             batch_no=batch_no,
             name=name,
             description=description,
+            partner_id=partner_id,
             status=BatchStatus.PENDING,
             created_by=created_by
         )

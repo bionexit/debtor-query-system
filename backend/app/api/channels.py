@@ -97,6 +97,11 @@ def test_channel(
     )
     
     if not success:
+        if message == "Channel not found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=message
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=message

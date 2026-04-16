@@ -5,6 +5,7 @@ from app.models.database import get_db
 from app.models.models import Partner, Debtor
 from app.schemas.schemas import PartnerQueryRequest, PartnerResponse
 from app.services.partner_service import PartnerService
+from app.services.debtor_service import DebtorService
 from datetime import datetime
 import hmac
 import hashlib
@@ -14,7 +15,7 @@ router = APIRouter(prefix="/partner", tags=["partner"])
 
 
 def verify_partner_auth(
-    authorization: str = None,
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ) -> Partner:
     """Verify partner API authentication"""
@@ -107,6 +108,10 @@ def query_debtor(
             data=None
         )
     
+    # Decrypt phone number
+    debtor_service = DebtorService(db)
+    phone = debtor_service.decrypt_phone(debtor)
+    
     return PartnerResponse(
         code=200,
         message="Success",
@@ -114,9 +119,9 @@ def query_debtor(
             "debtor_id": debtor.id,
             "name": debtor.name,
             "id_card": debtor.id_card,
-            "phone": debtor.phone,
-            "debt_amount": debtor.debt_amount,
-            "status": debtor.status.value
+            "phone": phone,
+            "debt_amount": debtor.overdue_amount,
+            "status": debtor.status.value if debtor.status else None
         }
     )
 
@@ -132,11 +137,13 @@ def list_partners(
         "partners": [
             {
                 "id": p.id,
-                "name": p.name,
-                "is_active": p.is_active,
-                "rate_limit": p.rate_limit,
-                "daily_limit": p.daily_limit,
-                "today_usage": p.today_usage
+                "partner_name": p.partner_name,
+                "partner_code": p.partner_code,
+                "is_api_enabled": p.is_api_enabled,
+                "status": p.status,
+                "rate_limit_per_minute": p.rate_limit_per_minute,
+                "daily_query_limit": p.daily_query_limit,
+                "today_query_count": p.today_query_count
             }
             for p in partners
         ]
@@ -161,7 +168,7 @@ def create_partner(
     
     return {
         "id": partner.id,
-        "name": partner.name,
+        "partner_name": partner.partner_name,
         "api_key": partner.api_key,
         "secret_key": partner.secret_key,
         "message": "Partner created successfully"

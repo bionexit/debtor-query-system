@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import Optional, Tuple, List
 from datetime import datetime
+import uuid
 from app.models.models import Config, ConfigChangeLog
 
 
@@ -16,11 +17,16 @@ class ConfigService:
         if existing:
             return None, f"Configuration key '{config_key}' already exists"
         
+        # Generate config_id from UUID
+        config_id = f"CFG-{uuid.uuid4().hex[:8].upper()}"
+        
         config = Config(
+            config_id=config_id,
             config_key=config_key,
             config_value=config_value,
             description=description,
-            changed_by=changed_by
+            changed_by=changed_by,
+            is_active=True
         )
         db.add(config)
         db.commit()
@@ -70,7 +76,9 @@ class ConfigService:
         
         # Create change log
         change_log = ConfigChangeLog(
-            config_id=config_id,
+            config_id=config.id,
+            config_name=config.config_key,  # Use config_key as config_name
+            config_key=config.config_key,
             old_value=old_value,
             new_value=config_value,
             changed_by=changed_by,
@@ -99,14 +107,14 @@ class ConfigService:
         """Get change history for a configuration"""
         return db.query(ConfigChangeLog).filter(
             ConfigChangeLog.config_id == config_id
-        ).order_by(ConfigChangeLog.created_at.desc()).offset(skip).limit(limit).all()
+        ).order_by(ConfigChangeLog.changed_at.desc()).offset(skip).limit(limit).all()
     
     @staticmethod
     def get_all_change_logs(db: Session, skip: int = 0, 
                             limit: int = 100) -> List[ConfigChangeLog]:
         """Get all configuration change logs"""
         return db.query(ConfigChangeLog).order_by(
-            ConfigChangeLog.created_at.desc()
+            ConfigChangeLog.changed_at.desc()
         ).offset(skip).limit(limit).all()
     
     @staticmethod
@@ -127,6 +135,8 @@ class ConfigService:
         # Create change log
         change_log = ConfigChangeLog(
             config_id=config.id,
+            config_name=config.config_key,  # Use config_key as config_name
+            config_key=config.config_key,
             old_value=old_value,
             new_value=new_value,
             changed_by=changed_by,

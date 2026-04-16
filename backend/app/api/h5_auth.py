@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
 from sqlalchemy.orm import Session
 from typing import List
 from app.models.database import get_db
@@ -14,7 +14,7 @@ from app.api.deps import get_db as deps_get_db
 router = APIRouter(prefix="/h5", tags=["h5"])
 
 
-def get_h5_user_from_token(authorization: str = None, db: Session = Depends(get_db)) -> H5User:
+def get_h5_user_from_token(authorization: str = Header(None), db: Session = Depends(get_db)) -> H5User:
     """Get H5 user from authorization header"""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
@@ -22,7 +22,7 @@ def get_h5_user_from_token(authorization: str = None, db: Session = Depends(get_
             detail="Missing or invalid authorization header"
         )
     
-    token = authorization.replace("Bearer ", "")
+    token = authorization.replace("Bearer ", "", 1)
     payload = verify_token(token)
     
     if not payload:

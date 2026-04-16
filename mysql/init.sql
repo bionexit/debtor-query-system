@@ -46,20 +46,35 @@ CREATE TABLE IF NOT EXISTS batches (
 -- Debtors table (AFTER batches since it references batches.id)
 CREATE TABLE IF NOT EXISTS debtors (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    debtor_number VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
-    id_card VARCHAR(18) NOT NULL UNIQUE,
-    phone VARCHAR(20) NOT NULL,
-    address VARCHAR(255),
-    debt_amount FLOAT DEFAULT 0.0,
-    status ENUM('active', 'blacklisted', 'cleared') DEFAULT 'active',
+    id_card VARCHAR(20) UNIQUE,
+    phone VARCHAR(20),
+    encrypted_phone VARCHAR(255),
+    phone_nonce VARCHAR(50),
+    phone_tag VARCHAR(50),
+    email VARCHAR(100),
+    bank_name VARCHAR(100),
+    bank_account VARCHAR(50),
+    bank_account_name VARCHAR(100),
+    address TEXT,
     remark TEXT,
-    batch_id INT NULL,
+    status VARCHAR(20) DEFAULT 'active',
+    overdue_amount INT DEFAULT 0,
+    overdue_days INT DEFAULT 0,
+    last_query_at DATETIME,
+    query_count INT DEFAULT 0,
+    is_deleted BOOLEAN DEFAULT FALSE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by_id INT,
+    updated_by_id INT,
     INDEX idx_name (name),
     INDEX idx_id_card (id_card),
     INDEX idx_phone (phone),
-    FOREIGN KEY (batch_id) REFERENCES batches(id) ON DELETE SET NULL
+    INDEX idx_debtor_number (debtor_number),
+    FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (updated_by_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Vouchers table
@@ -172,17 +187,42 @@ CREATE TABLE IF NOT EXISTS h5_users (
 -- Partners table
 CREATE TABLE IF NOT EXISTS partners (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    api_key VARCHAR(100) NOT NULL UNIQUE,
-    secret_key VARCHAR(255) NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    rate_limit INT DEFAULT 100,
-    daily_limit INT DEFAULT 10000,
-    today_usage INT DEFAULT 0,
-    last_used_at DATETIME,
+    partner_id VARCHAR(32) NOT NULL UNIQUE,
+    partner_name VARCHAR(100) NOT NULL,
+    partner_code VARCHAR(50) NOT NULL UNIQUE,
+    contact_person VARCHAR(50),
+    contact_phone VARCHAR(20),
+    contact_email VARCHAR(100),
+    status VARCHAR(20) DEFAULT 'active',
+    api_key VARCHAR(64) NOT NULL UNIQUE,
+    api_key_expires_at DATETIME,
+    is_api_enabled BOOLEAN DEFAULT TRUE,
+    is_revoked BOOLEAN DEFAULT FALSE,
+    revoked_at DATETIME,
+    revoked_reason VARCHAR(255),
+    rate_limit_per_minute INT DEFAULT 60,
+    rate_limit_per_day INT DEFAULT 10000,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_partner_id (partner_id),
     INDEX idx_api_key (api_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Case Batches table (委案批次)
+CREATE TABLE IF NOT EXISTS case_batches (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    batch_id VARCHAR(32) NOT NULL UNIQUE,
+    batch_name VARCHAR(100) NOT NULL,
+    client_name VARCHAR(100),
+    partner_id VARCHAR(32) NOT NULL,
+    commission_date DATETIME,
+    status VARCHAR(20) DEFAULT 'active',
+    remark TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_batch_id (batch_id),
+    INDEX idx_partner_id (partner_id),
+    FOREIGN KEY (partner_id) REFERENCES partners(partner_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Debt Info table
@@ -238,6 +278,20 @@ CREATE TABLE IF NOT EXISTS config_change_logs (
     INDEX idx_config_id (config_id),
     FOREIGN KEY (config_id) REFERENCES configs(id) ON DELETE CASCADE,
     FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Captchas table (图形验证码)
+CREATE TABLE IF NOT EXISTS captchas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    captcha_key VARCHAR(64) NOT NULL UNIQUE,
+    captcha_code VARCHAR(10) NOT NULL,
+    image_data TEXT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    is_used BOOLEAN DEFAULT FALSE,
+    used_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_captcha_key (captcha_key),
+    INDEX idx_expires_at (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Insert default admin user (password: admin123)

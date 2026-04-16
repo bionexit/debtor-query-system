@@ -209,3 +209,74 @@ class SMSService:
             query = query.filter(SMSLog.sms_type == sms_type)
         
         return query.order_by(SMSLog.created_at.desc()).offset(skip).limit(limit).all()
+
+
+    def get_templates(self, skip: int = 0, limit: int = 100, is_active: Optional[bool] = None) -> List["SmsTemplate"]:
+        """Get SMS templates with optional active filter."""
+        from app.models.sms import SmsTemplate
+        query = self.db.query(SmsTemplate)
+        if is_active is not None:
+            query = query.filter(SmsTemplate.status == ("active" if is_active else "inactive"))
+        return query.order_by(SmsTemplate.created_at.desc()).offset(skip).limit(limit).all()
+
+    def get_template_by_id(self, template_id: int) -> Optional["SmsTemplate"]:
+        """Get SMS template by ID."""
+        from app.models.sms import SmsTemplate
+        return self.db.query(SmsTemplate).filter(SmsTemplate.id == template_id).first()
+
+    def create_template(self, name: str, content: str, variables: Optional[str] = None, created_by: Optional[int] = None) -> tuple[Optional["SmsTemplate"], Optional[str]]:
+        """Create a new SMS template."""
+        from app.models.sms import SmsTemplate
+        import uuid
+        try:
+            template = SmsTemplate(
+                template_id=str(uuid.uuid4())[:8],
+                template_name=name,
+                template_content=content,
+                variables=variables.split(",") if variables else [],
+                status="active"
+            )
+            self.db.add(template)
+            self.db.commit()
+            self.db.refresh(template)
+            return template, None
+        except Exception as e:
+            self.db.rollback()
+            return None, str(e)
+
+    def update_template(self, template_id: int, **kwargs) -> tuple[Optional["SmsTemplate"], Optional[str]]:
+        """Update an SMS template."""
+        from app.models.sms import SmsTemplate
+        template = self.get_template_by_id(template_id)
+        if not template:
+            return None, "Template not found"
+        try:
+            if "name" in kwargs:
+                template.template_name = kwargs["name"]
+            if "content" in kwargs:
+                template.template_content = kwargs["content"]
+            if "variables" in kwargs:
+                variables = kwargs["variables"]
+                template.variables = variables.split(",") if isinstance(variables, str) else variables
+            if "is_active" in kwargs:
+                template.status = "active" if kwargs["is_active"] else "inactive"
+            self.db.commit()
+            self.db.refresh(template)
+            return template, None
+        except Exception as e:
+            self.db.rollback()
+            return None, str(e)
+
+    def delete_template(self, template_id: int) -> tuple[bool, Optional[str]]:
+        """Delete an SMS template."""
+        from app.models.sms import SmsTemplate
+        template = self.get_template_by_id(template_id)
+        if not template:
+            return False, "Template not found"
+        try:
+            self.db.delete(template)
+            self.db.commit()
+            return True, None
+        except Exception as e:
+            self.db.rollback()
+            return False, str(e)

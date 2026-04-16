@@ -137,7 +137,15 @@ class TestScanChannels:
         """Test channels are returned ordered by priority"""
         # Create multiple channels with different priorities
         channels = [
-            SMSChannel(name=f"Channel {i}", provider="Provider", priority=i, is_active=True)
+            SMSChannel(
+                channel_id=f"TSC{i:03d}",
+                channel_name=f"Test Scan Channel {i}",
+                channel_code=f"TSCANAL_{i}",
+                name=f"Test Scan Channel {i}",
+                provider="Provider",
+                priority=i,
+                is_active=True
+            )
             for i in range(3, 0, -1)
         ]
         for ch in channels:
@@ -231,6 +239,9 @@ class TestDeleteChannel:
         """Test successful channel deletion (only testing status allowed)"""
         # Create channel in testing status
         channel = SMSChannel(
+            channel_id="CH999",
+            channel_name="To Delete",
+            channel_code="CHANNEL_DELETE",
             name="To Delete",
             provider="Provider",
             status=ChannelStatus.TESTING

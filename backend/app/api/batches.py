@@ -21,6 +21,7 @@ def create_batch(
         db,
         name=batch.name,
         description=batch.description,
+        partner_id=batch.partner_id,
         created_by=current_user.id
     )
     

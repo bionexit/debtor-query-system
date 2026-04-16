@@ -14,10 +14,11 @@ def generate_captcha(db: Session = Depends(get_db)):
     Returns captcha_key and base64-encoded image.
     """
     captcha_service = CaptchaService(db)
-    captcha_key, image = captcha_service.generate()
+    captcha_key, captcha_value, image = captcha_service.generate()
     
     return CaptchaResponse(
         captcha_key=captcha_key,
+        captcha_value=captcha_value,
         image=image
     )
 
@@ -34,6 +35,12 @@ def verify_captcha(
     is_valid, error = captcha_service.verify(request.captcha_key, request.captcha_value)
     
     if not is_valid:
+        if "not found" in error.lower():
+            from fastapi import HTTPException, status
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error
+            )
         return {
             "success": False,
             "message": error

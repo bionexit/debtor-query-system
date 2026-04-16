@@ -1,19 +1,19 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
 
 class UserRole(str, Enum):
-    ADMIN = "admin"
-    OPERATOR = "operator"
-    VIEWER = "viewer"
+    ADMIN = "ADMIN"
+    OPERATOR = "OPERATOR"
+    VIEWER = "VIEWER"
 
 
 class UserStatus(str, Enum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    LOCKED = "locked"
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    LOCKED = "LOCKED"
 
 
 class UserBase(BaseModel):
@@ -23,10 +23,24 @@ class UserBase(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
     role: UserRole = UserRole.VIEWER
 
+    @field_validator('role', mode='before')
+    @classmethod
+    def role_uppercase(cls, v):
+        if isinstance(v, str):
+            return v.upper()
+        return v
+
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6, max_length=100)
     created_by_id: Optional[int] = None
+
+    @field_validator('role', mode='before')
+    @classmethod
+    def role_uppercase(cls, v):
+        if isinstance(v, str):
+            return v.upper()
+        return v
 
 
 class UserUpdate(BaseModel):

@@ -15,7 +15,8 @@ class TestCreateBatch:
             headers=operator_headers,
             json={
                 "name": "New Batch",
-                "description": "Test batch"
+                "description": "Test batch",
+                "partner_id": "TESTPARTNER001"
             }
         )
         assert response.status_code == 200
@@ -29,7 +30,10 @@ class TestCreateBatch:
         response = client.post(
             "/api/batches/",
             headers=operator_headers,
-            json={"name": "Simple Batch"}
+            json={
+                "name": "Simple Batch",
+                "partner_id": "TESTPARTNER001"
+            }
         )
         assert response.status_code == 200
         data = response.json()
@@ -139,6 +143,7 @@ class TestUpdateBatch:
         batch = Batch(
             batch_no="BATCH-COMPLETED",
             name="Completed Batch",
+            partner_id="PARTNER001",
             status=BatchStatus.COMPLETED,
             created_by=admin_user.id
         )
@@ -186,6 +191,7 @@ class TestDeleteBatch:
         batch = Batch(
             batch_no="BATCH-PROCESSING",
             name="Processing Batch",
+            partner_id="PARTNER001",
             status=BatchStatus.PROCESSING,
             created_by=admin_user.id
         )

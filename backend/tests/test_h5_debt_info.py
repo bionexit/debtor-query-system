@@ -37,11 +37,11 @@ class TestH5DebtorDetail:
         response = client.get("/api/h5/debtor/SOME123")
         assert response.status_code == 401
 
-    def test_h5_debtor_detail_not_found(self, client, h5_token_headers):
+    def test_h5_debtor_detail_not_found(self, client, h5_headers):
         """Test debtor detail for non-existent debtor returns 404"""
         response = client.get(
             "/api/h5/debtor/NONEXISTENT999",
-            headers=h5_token_headers
+            headers=h5_headers
         )
         assert response.status_code in [401, 404]
 

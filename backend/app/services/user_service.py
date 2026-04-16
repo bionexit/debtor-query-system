@@ -153,7 +153,7 @@ class UserService:
         token_data = {
             "sub": str(user.id),
             "username": user.username,
-            "role": user.role.value,
+            "role": user.role.value.lower(),
             "is_superadmin": user.is_superadmin,
         }
         return create_access_token(token_data)

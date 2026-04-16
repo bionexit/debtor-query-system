@@ -9,6 +9,7 @@ class DebtorStatus(str, Enum):
     OVERDUE = "overdue"
     CLEARED = "cleared"
     LEGAL = "legal"
+    BLACKLISTED = "blacklisted"
 
 
 class DebtorBase(BaseModel):

@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List, Tuple
 from datetime import datetime
 import os
+import uuid
 from app.models.models import Voucher, VoucherStatus
 
 
@@ -13,6 +14,7 @@ class VoucherService:
                       uploaded_by: int, total_count: int = 0) -> Voucher:
         """Create a new voucher record"""
         voucher = Voucher(
+            voucher_id=f"VCH{uuid.uuid4().hex[:12].upper()}",
             file_name=file_name,
             file_path=file_path,
             file_size=file_size,
@@ -69,8 +71,9 @@ class VoucherService:
         if not voucher:
             return None, "Voucher not found"
         
-        if voucher.status != VoucherStatus.PENDING:
-            return None, f"Voucher is already {voucher.status.value}"
+        status_value = voucher.status.value if hasattr(voucher.status, 'value') else voucher.status
+        if status_value != VoucherStatus.PENDING.value:
+            return None, f"Voucher is already {status_value}"
         
         voucher.status = VoucherStatus.APPROVED
         voucher.reviewed_by = reviewed_by
@@ -89,8 +92,9 @@ class VoucherService:
         if not voucher:
             return None, "Voucher not found"
         
-        if voucher.status != VoucherStatus.PENDING:
-            return None, f"Voucher is already {voucher.status.value}"
+        status_value = voucher.status.value if hasattr(voucher.status, 'value') else voucher.status
+        if status_value != VoucherStatus.PENDING.value:
+            return None, f"Voucher is already {status_value}"
         
         voucher.status = VoucherStatus.REJECTED
         voucher.reviewed_by = reviewed_by

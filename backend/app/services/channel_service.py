@@ -13,7 +13,11 @@ class ChannelService:
     def create_channel(db: Session, name: str, provider: str, endpoint: str = None,
                       api_key: str = None, priority: int = 1) -> SMSChannel:
         """Create a new SMS channel"""
+        import uuid
         channel = SMSChannel(
+            channel_id=f"CH{uuid.uuid4().hex[:8].upper()}",
+            channel_code=f"CHANNEL_{uuid.uuid4().hex[:8].upper()}",
+            channel_name=name,
             name=name,
             provider=provider,
             endpoint=endpoint,

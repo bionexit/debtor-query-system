@@ -2,7 +2,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.models.database import get_db
-from app.models.models import User
+from app.models.user import User, UserRole, UserStatus
 from app.core.security import verify_token
 
 security = HTTPBearer()
@@ -36,7 +36,7 @@ def get_current_user(
             detail="User not found"
         )
     
-    if not user.is_active:
+    if user.status != UserStatus.ACTIVE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is deactivated"
@@ -47,7 +47,7 @@ def get_current_user(
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
     """Require admin role"""
-    if user.role.value != "admin":
+    if user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
@@ -57,7 +57,7 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
 
 def require_operator(user: User = Depends(get_current_user)) -> User:
     """Require operator or admin role"""
-    if user.role.value not in ["admin", "operator"]:
+    if user.role not in [UserRole.ADMIN, UserRole.OPERATOR]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Operator access required"
